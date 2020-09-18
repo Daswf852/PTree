@@ -1,0 +1,10 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+ColumnLimit: 0
+BreakConstructorInitializers: BeforeComma
+SpaceBeforeCtorInitializerColon: false
+ConstructorInitializerIndentWidth: 0
+AlwaysBreakTemplateDeclarations: No
+SpaceAfterTemplateKeyword: false
+PenaltyBreakTemplateDeclaration: 0
