@@ -4,6 +4,7 @@
 #include <istream>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -13,8 +14,18 @@
 
 namespace Shiba::Perm {
 
+enum class TraversalOrder {
+    PreOrder,
+    InOrder,
+    PostOrder
+};
+
 const static char pDelimiter = '.';
 const static std::regex pSegmentRegex("^[a-z]{1}[a-zA-Z_-]{0,}$");
+
+bool SegmentIsValid(const std::string &segment) {
+    return std::regex_match(segment, pSegmentRegex);
+}
 
 except(PermissionException, std::exception);
 except(BadSegment, PermissionException);
@@ -63,10 +74,9 @@ class LinearPermission {
         return *this;
     }
 
-    void Append(const std::string &segment) {
-        std::unique_lock<std::mutex> lock(mutex);
-
-        if (std::regex_match(segment, pSegmentRegex)) {
+    void
+    Append(const std::string &segment) {
+        if (SegmentIsValid(segment)) {
             lazyString += '.';
             lazyString += segment;
             permission.push_back(segment);
@@ -74,14 +84,10 @@ class LinearPermission {
     }
 
     std::string String() const {
-        std::unique_lock<std::mutex> lock(mutex);
-
         return lazyString;
     }
 
     std::vector<std::string> Permission() const {
-        std::unique_lock<std::mutex> lock(mutex);
-
         return permission;
     }
 
@@ -110,119 +116,150 @@ class LinearPermission {
         lazyString.pop_back();
     }
 
-    mutable std::mutex mutex;
     std::vector<std::string> permission;
     std::string lazyString;
 };
 
-class TreeNode {
+class PTree {
   public:
-    TreeNode(const std::string &identifier, std::optional<std::reference_wrapper<const TreeNode>> parent = std::nullopt)
-    : identifier(identifier)
-    , parent(parent) {
+    PTree(std::string data, std::optional<std::reference_wrapper<PTree>> parent = std::nullopt, std::size_t depth = 0)
+    : parent(parent)
+    , data(data)
+    , depth(depth) {
     }
 
-    ~TreeNode() = default;
-
-    void Append(const LinearPermission &perm) {
-        Append(perm.Permission());
+    ~PTree() {
     }
 
-    LinearPermission GetLinear() const {
-        std::unique_lock<std::mutex> lock(nodeMutex);
-        std::vector<std::string> identifiers;
-
-        std::reference_wrapper<const TreeNode> ref = *this;
-        identifiers.push_back(ref.get().identifier);
-        while (ref.get().parent != std::nullopt) {
-            ref = ref.get().parent->get();
-            identifiers.push_back(ref.get().identifier);
-        }
-
-        std::reverse(identifiers.begin(), identifiers.end());
-
-        return LinearPermission(identifiers);
-    }
-
-    bool ContainsLinear(const LinearPermission &perm) {
-        std::unique_lock<std::mutex> lock(nodeMutex);
-
-        std::string ident = perm.Permission().at(0);
-        if (ident != identifier)
-            return false;
-
-        auto newPerm = perm;
-        newPerm.PopFront();
-
-        if (newPerm.Permission().size() == 0)
-            return true;
-
-        ident = newPerm.Permission().at(0);
-
-        if (children.size() == 0) {
-            return (ident == identifier);
-        } else {
-            for (const auto &child : children) {
-                if (child->identifier == ident) {
-                    return child->ContainsLinear(newPerm);
-                }
-            }
-        }
-
+    bool HasIndex(const std::string &data) const {
+        for (const auto &node : children)
+            if (node.data == data)
+                return true;
         return false;
     }
 
-    friend std::ostream &operator<<(std::ostream &stream, const TreeNode &node) {
-        if (node.children.size() == 0) {
-            auto perm = node.GetLinear();
+    std::size_t GetIndex(const std::string &data) const {
+        for (auto it = children.cbegin(); it != children.cend(); it++)
+            if (it->data == data)
+                return it - children.cbegin();
+        throw std::out_of_range("Couldn't find index");
+    }
 
-            stream << perm << std::endl;
-        } else {
-            for (const auto &child : node.children) {
-                stream << *child;
-            }
+    std::vector<PTree>::iterator Get(const std::string &data) {
+        auto idx = std::find_if(children.begin(), children.end(), [&data](PTree &node) {
+            return node.data == data;
+        });
+
+        if (idx == children.end())
+            throw std::out_of_range("Couldn't find iterator");
+
+        return idx;
+    }
+
+    std::vector<PTree>::const_iterator Get(const std::string &data) const {
+        auto idx = std::find_if(children.cbegin(), children.cend(), [&data](const PTree &node) {
+            return node.data == data;
+        });
+
+        if (idx == children.cend())
+            throw std::out_of_range("Couldn't find iterator");
+
+        return idx;
+    }
+
+    bool HasChildren() const {
+        return !children.empty();
+    }
+
+    void Insert(const std::string &data) {
+        if (!HasIndex(data))
+            children.push_back(PTree(data, *this, depth + 1));
+    }
+
+    void Insert(const std::vector<std::string> &dataVec) {
+        Insert(dataVec.cbegin(), dataVec.cend());
+    }
+
+    void Insert(std::vector<std::string>::const_iterator it, decltype(it) end) {
+        if (it == end)
+            return;
+
+        try {
+            auto targetIt = Get(*it);
+            targetIt->Insert(it + 1, end);
+        } catch (std::out_of_range &) {
+            children.push_back(PTree(*it, *this, depth + 1));
+            (children.end() - 1)->Insert(it + 1, end);
         }
+    }
+
+    template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
+    void Traverse(Callable callback) {
+        InternalTraverse<Callable, PTree *, order>(callback, this);
+    }
+
+    template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
+    void Traverse(Callable callback) const {
+        const_cast<PTree *>(this)->InternalTraverse<Callable, const PTree *, order>(callback, this);
+    }
+
+    const std::string &Identifier() const {
+        return data;
+    }
+
+    std::size_t Depth() const {
+        return depth;
+    }
+
+    std::vector<std::string> GetFullBranch() {
+        std::vector<std::string> vec;
+
+        std::optional<std::reference_wrapper<PTree>> current = *this;
+        while (current.has_value()) {
+            vec.push_back(current->get().data);
+            current = current->get().parent;
+        }
+
+        std::reverse(vec.begin(), vec.end());
+        return vec;
+    }
+
+    LinearPermission GetPermission() {
+        return LinearPermission(GetFullBranch());
+    }
+
+    friend std::ostream &operator<<(std::ostream &stream, const PTree &tree) {
+        tree.Traverse([](const Shiba::Perm::PTree &node) {
+            for (std::size_t i = 0; i != node.Depth(); i++)
+                std::cout << ' ';
+            std::cout << node.Identifier() << std::endl;
+        });
 
         return stream;
     }
 
   private:
-    std::size_t GetChildIndex(const std::string &identifier) const { //not thread safe
-        for (std::size_t idx = 0; const auto &child : children) {
-            if (child->identifier == identifier)
-                return idx;
-            ++idx;
+    std::optional<std::reference_wrapper<PTree>> parent;
+    std::vector<PTree> children;
+    std::string data;
+    std::size_t depth;
+
+    template<typename Callable, typename ThisType, TraversalOrder order = TraversalOrder::PreOrder>
+    void InternalTraverse(Callable callback, ThisType th) {
+        static_assert(order == TraversalOrder::PreOrder || order == TraversalOrder::PostOrder);
+
+        if constexpr (order == TraversalOrder::PreOrder) {
+            callback(*th);
+            for (auto &child : children)
+                child.InternalTraverse<Callable, ThisType, order>(callback, &child);
+
+        } else if constexpr (order == TraversalOrder::PostOrder) {
+            for (auto &child : children)
+                child.InternalTraverse<Callable, ThisType, order>(callback, &child);
+
+            callback(*th);
         }
-        throw std::out_of_range("");
     }
-
-    void Append(std::vector<std::string> vec) {
-        if (vec.size() == 0)
-            return;
-
-        std::unique_lock<std::mutex> lock(nodeMutex);
-
-        std::size_t existingIndex = 0;
-        std::string ident = vec.at(0);
-
-        try {
-            existingIndex = GetChildIndex(ident);
-        } catch (std::out_of_range &) {
-            children.push_back(std::make_unique<TreeNode>(ident, *this));
-            existingIndex = children.size() - 1;
-        }
-
-        vec.erase(vec.begin());
-
-        if (vec.size() > 0)
-            children.at(existingIndex)->Append(vec);
-    }
-
-    std::string identifier;
-    std::vector<std::unique_ptr<TreeNode>> children;
-    std::optional<std::reference_wrapper<const TreeNode>> parent;
-
-    mutable std::mutex nodeMutex;
 };
 
 } // namespace Shiba::Perm
