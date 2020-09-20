@@ -74,8 +74,7 @@ class LinearPermission {
         return *this;
     }
 
-    void
-    Append(const std::string &segment) {
+    void Append(const std::string &segment) {
         if (SegmentIsValid(segment)) {
             lazyString += '.';
             lazyString += segment;
@@ -120,22 +119,15 @@ class LinearPermission {
     std::string lazyString;
 };
 
-class PTree {
+class PNode {
   public:
-    PTree(std::string data, std::optional<std::reference_wrapper<PTree>> parent = std::nullopt, std::size_t depth = 0)
+    PNode(std::string data, std::optional<std::reference_wrapper<PNode>> parent = std::nullopt, std::size_t depth = 0)
     : parent(parent)
     , data(data)
     , depth(depth) {
     }
 
-    ~PTree() {
-    }
-
-    bool HasIndex(const std::string &data) const {
-        for (const auto &node : children)
-            if (node.data == data)
-                return true;
-        return false;
+    ~PNode() {
     }
 
     std::size_t GetIndex(const std::string &data) const {
@@ -145,8 +137,8 @@ class PTree {
         throw std::out_of_range("Couldn't find index");
     }
 
-    std::vector<PTree>::iterator Get(const std::string &data) {
-        auto idx = std::find_if(children.begin(), children.end(), [&data](PTree &node) {
+    std::vector<PNode>::iterator Get(const std::string &data) {
+        auto idx = std::find_if(children.begin(), children.end(), [&data](PNode &node) {
             return node.data == data;
         });
 
@@ -156,8 +148,8 @@ class PTree {
         return idx;
     }
 
-    std::vector<PTree>::const_iterator Get(const std::string &data) const {
-        auto idx = std::find_if(children.cbegin(), children.cend(), [&data](const PTree &node) {
+    std::vector<PNode>::const_iterator Get(const std::string &data) const {
+        auto idx = std::find_if(children.cbegin(), children.cend(), [&data](const PNode &node) {
             return node.data == data;
         });
 
@@ -171,9 +163,12 @@ class PTree {
         return !children.empty();
     }
 
-    void Insert(const std::string &data) {
-        if (!HasIndex(data))
-            children.push_back(PTree(data, *this, depth + 1));
+    void InsertLP(const std::string &perm) {
+        Insert(LinearPermission(perm));
+    }
+
+    void Insert(const LinearPermission &perm) {
+        Insert(perm.Permission());
     }
 
     void Insert(const std::vector<std::string> &dataVec) {
@@ -188,19 +183,55 @@ class PTree {
             auto targetIt = Get(*it);
             targetIt->Insert(it + 1, end);
         } catch (std::out_of_range &) {
-            children.push_back(PTree(*it, *this, depth + 1));
+            Insert(*it);
             (children.end() - 1)->Insert(it + 1, end);
         }
     }
 
+    void Insert(const std::string &data) {
+        if (!Contains(data))
+            children.push_back(PNode(data, *this, depth + 1));
+    }
+
+    bool ContainsLP(const std::string &perm) const {
+        return Contains(LinearPermission(perm));
+    }
+
+    bool Contains(const LinearPermission &perm) const {
+        return Contains(perm.Permission());
+    }
+
+    bool Contains(const std::vector<std::string> &vec) const {
+        return Contains(vec.cbegin(), vec.cend());
+    }
+
+    bool Contains(std::vector<std::string>::const_iterator it, decltype(it) end) const {
+        if (it == end)
+            return !HasChildren();
+
+        try {
+            auto newIt = Get(*it);
+            return newIt->Contains(it + 1, end);
+        } catch (std::out_of_range &) {
+            return false;
+        }
+    }
+
+    bool Contains(const std::string &) const {
+        for (const auto &node : children)
+            if (node.data == data)
+                return true;
+        return false;
+    }
+
     template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
     void Traverse(Callable callback) {
-        InternalTraverse<Callable, PTree *, order>(callback, this);
+        InternalTraverse<Callable, PNode *, order>(callback, this);
     }
 
     template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
     void Traverse(Callable callback) const {
-        const_cast<PTree *>(this)->InternalTraverse<Callable, const PTree *, order>(callback, this);
+        const_cast<PNode *>(this)->InternalTraverse<Callable, const PNode *, order>(callback, this);
     }
 
     const std::string &Identifier() const {
@@ -211,11 +242,11 @@ class PTree {
         return depth;
     }
 
-    std::vector<std::string> GetFullBranch() {
+    std::vector<std::string> GetFullBranch() const {
         std::vector<std::string> vec;
 
-        std::optional<std::reference_wrapper<PTree>> current = *this;
-        while (current.has_value()) {
+        std::optional<std::reference_wrapper<const PNode>> current = *this;
+        while (current != std::nullopt) {
             vec.push_back(current->get().data);
             current = current->get().parent;
         }
@@ -228,8 +259,8 @@ class PTree {
         return LinearPermission(GetFullBranch());
     }
 
-    friend std::ostream &operator<<(std::ostream &stream, const PTree &tree) {
-        tree.Traverse([](const Shiba::Perm::PTree &node) {
+    friend std::ostream &operator<<(std::ostream &stream, const PNode &tree) {
+        tree.Traverse<TraversalOrder::PreOrder>([](const Shiba::Perm::PNode &node) {
             for (std::size_t i = 0; i != node.Depth(); i++)
                 std::cout << ' ';
             std::cout << node.Identifier() << std::endl;
@@ -239,8 +270,8 @@ class PTree {
     }
 
   private:
-    std::optional<std::reference_wrapper<PTree>> parent;
-    std::vector<PTree> children;
+    std::optional<std::reference_wrapper<PNode>> parent;
+    std::vector<PNode> children;
     std::string data;
     std::size_t depth;
 
@@ -252,11 +283,9 @@ class PTree {
             callback(*th);
             for (auto &child : children)
                 child.InternalTraverse<Callable, ThisType, order>(callback, &child);
-
         } else if constexpr (order == TraversalOrder::PostOrder) {
             for (auto &child : children)
                 child.InternalTraverse<Callable, ThisType, order>(callback, &child);
-
             callback(*th);
         }
     }

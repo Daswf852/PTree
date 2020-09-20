@@ -1,39 +1,47 @@
+#include <ios>
 #include <iostream>
 
 #include "tree.hpp"
 
-int main(int, char **) {
-    /*std::vector<std::vector<std::string>> TreeList{
-        {"foo", "bar"},
-        {"foo", "baz"},
-        {"qux"},
-        {"quz", "quuz"},
-    };*/
+namespace Perm = Shiba::Perm;
 
-    std::vector<std::vector<std::string>> TreeList{
-        {"b", "a"},
-        {"b", "d", "c"},
-        {"b", "d", "e"},
-        {"g", "i", "h"},
+#define Test(tree, str) \
+    std::cout << str << ": " << std::boolalpha << tree.ContainsLP(str) << std::endl;
+
+int main(int, char **) {
+    std::vector<std::string> toInsert{
+        "special.placeholder",
+        "special.chanOP",
+        "core.utils.echo",
+        "core.mgmt.restart",
     };
 
-    Shiba::Perm::PTree tree("f");
+    Perm::PNode rootTree("root");
+    for (const auto &str : toInsert)
+        rootTree.InsertLP(str);
 
-    for (const auto &vec : TreeList) {
-        tree.Insert(vec);
-    }
+    std::cout << rootTree;
 
-    std::cout << tree;
+    for (const auto &str : toInsert)
+        Test(rootTree, str);
 
-    std::cout << "Traversal, pre-order:" << std::endl;
-    tree.Traverse<Shiba::Perm::TraversalOrder::PreOrder>([](const Shiba::Perm::PTree &node) { std::cout << node.Identifier(); });
+    Test(rootTree, "root");
+    Test(rootTree, "root.special");
+    Test(rootTree, "root.core");
+    Test(rootTree, "root.core.utils");
+    Test(rootTree, "root.core.mgmt");
+
     std::cout << std::endl;
-    /*std::cout << "Traversal, in-order:" << std::endl;
-    tree.Traverse<Shiba::Perm::TraversalOrder::InOrder>([](const Shiba::Perm::PTree &node) { std::cout << node.Identifier(); });
-    std::cout << std::endl;*/
-    std::cout << "Traversal, post-order:" << std::endl;
-    tree.Traverse<Shiba::Perm::TraversalOrder::PostOrder>([](const Shiba::Perm::PTree &node) { std::cout << node.Identifier(); });
-    std::cout << std::endl;
+
+    rootTree.Traverse([](Perm::PNode &node) {
+        if (node.HasChildren())
+            return;
+
+        for (const auto &str : node.GetFullBranch())
+            std::cout << str << '.';
+
+        std::cout << std::endl;
+    });
 
     return 0;
 }
