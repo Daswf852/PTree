@@ -121,159 +121,51 @@ class LinearPermission {
 
 class PNode {
   public:
-    PNode(std::string data, std::optional<std::reference_wrapper<PNode>> parent = std::nullopt, std::size_t depth = 0)
-    : parent(parent)
+    PNode()
+    : root(*this)
+    , parent(std::nullopt)
+    , data("root")
+    , depth(0) {}
+
+    PNode(std::string data)
+    : root(*this)
+    , parent(std::nullopt)
     , data(data)
-    , depth(depth) {
-    }
+    , depth(0) {}
+
+    PNode(const std::string &data, PNode &root, PNode &parent, std::size_t depth)
+    : root(root)
+    , parent(parent)
+    , data(data)
+    , depth(depth) {}
 
     ~PNode() {
     }
 
-    /*std::vector<PNode>::iterator GetIt(const std::string &data) {
-        auto it = std::find_if(children.begin(), children.end(), [&data](PNode &node) {
-            return node.data == data;
-        });
-
-        if (it == children.end())
-            throw std::out_of_range("Couldn't find iterator");
-
-        return it;
-    }
-
-    std::vector<PNode>::const_iterator GetIt(const std::string &data) const {
-        auto it = std::find_if(children.cbegin(), children.cend(), [&data](const PNode &node) {
-            return node.data == data;
-        });
-
-        if (it == children.cend())
-            throw std::out_of_range("Couldn't find iterator");
-
-        return it;
-    }*/
-
-    void FillParentsOfChildren() {
-        for (auto &child : children) {
-            child.parent = *this;
-            child.FillParentsOfChildren();
-        }
-    }
+    ///////////////////
+    // Trivial funcs //
+    ///////////////////
 
     bool HasChildren() const {
         return !children.empty();
     }
 
-    void InsertLP(const std::string &perm) {
-        Insert(LinearPermission(perm));
+    const std::string &Identifier() const {
+        return data;
     }
 
-    void Insert(const LinearPermission &perm) {
-        Insert(perm.Permission());
+    std::size_t Depth() const {
+        return depth;
     }
 
-    void Insert(const std::vector<std::string> &dataVec) {
-        Insert(dataVec.cbegin(), dataVec.cend());
+    PNode &Root() {
+        return root;
     }
 
-    void Insert(std::vector<std::string>::const_iterator it, decltype(it) end) {
-        if (it == end)
-            return;
-
-        try {
-            Get(*it).Insert(it + 1, end);
-        } catch (std::out_of_range &) {
-            Insert(*it);
-            (children.end() - 1)->Insert(it + 1, end);
-        }
-    }
-
-    void Insert(const std::string &data) {
-        if (!Contains(data))
-            children.push_back(PNode(data, *this, depth + 1));
-    }
-
-    bool ContainsLP(const std::string &perm) const {
-        return Contains(LinearPermission(perm));
-    }
-
-    bool Contains(const LinearPermission &perm) const {
-        return Contains(perm.Permission());
-    }
-
-    bool Contains(const std::vector<std::string> &vec) const {
-        return Contains(vec.cbegin(), vec.cend());
-    }
-
-    bool Contains(std::vector<std::string>::const_iterator it, decltype(it) end) const {
-        if (it == end)
-            return !HasChildren();
-
-        try {
-            return Get(*it).Contains(it + 1, end);
-        } catch (std::out_of_range &) {
-            return false;
-        }
-    }
-
-    bool Contains(const std::string &) const {
-        try {
-            Get(data);
-            return true;
-        } catch (std::out_of_range &) {
-            return false;
-        }
-    }
-
-    template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
-    void Traverse(Callable callback) {
-        InternalTraverse<Callable, PNode *, order>(callback, this);
-    }
-
-    template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
-    void Traverse(Callable callback) const {
-        const_cast<PNode *>(this)->InternalTraverse<Callable, const PNode *, order>(callback, this);
-    }
-
-    const PNode &GetLP(const std::string &perm) const {
-        try {
-            return Get(LinearPermission(perm).Permission());
-        } catch (std::out_of_range &) {
-            std::rethrow_exception(std::current_exception());
-        }
-    }
-
-    const PNode &Get(const std::vector<std::string> &vec) const {
-        try {
-            return Get(vec.cbegin(), vec.cend());
-        } catch (std::out_of_range &) {
-            std::rethrow_exception(std::current_exception());
-        }
-    }
-
-    PNode &Get(const std::vector<std::string> &vec) {
-        try {
-            return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(vec.cbegin(), vec.cend()));
-        } catch (std::out_of_range &) {
-            std::rethrow_exception(std::current_exception());
-        }
-    }
-
-    PNode &Get(std::vector<std::string>::const_iterator it, decltype(it) end) {
-        try {
-            return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(it, end));
-        } catch (std::out_of_range &) {
-            std::rethrow_exception(std::current_exception());
-        }
-    }
-
-    const PNode &Get(std::vector<std::string>::const_iterator it, decltype(it) end) const {
-        if (it == end)
-            return *this;
-
-        try {
-            return Get(*it).Get(it + 1, end);
-        } catch (std::out_of_range &) {
-            std::rethrow_exception(std::current_exception());
+    void InsertParents() {
+        for (auto &child : children) {
+            child.parent = *this;
+            child.InsertParents();
         }
     }
 
@@ -298,12 +190,139 @@ class PNode {
         throw std::runtime_error("how the fuck");
     }
 
-    const std::string &Identifier() const {
-        return data;
+    bool Contains(const std::string &) const {
+        try {
+            Get(data);
+            return true;
+        } catch (std::out_of_range &) {
+            return false;
+        }
     }
 
-    std::size_t Depth() const {
-        return depth;
+    bool Contains(std::vector<std::string>::const_iterator it, decltype(it) end) const {
+        if (it == end)
+            return !HasChildren(); //if the node has children, we can't match a wildcard check
+
+        try {
+            return Get(*it).Contains(it + 1, end);
+        } catch (std::out_of_range &) { //catch from Get
+            return !HasChildren();      //if the permission continues but the node doesn't, the node is a wildcard
+        }
+    }
+
+    PNode &Insert(const std::string &data) {
+        if (!Contains(data)) {
+            children.push_back(std::move(PNode(data, root, *this, depth + 1)));
+            root.InsertParents();
+            return *(children.end() - 1);
+        } else {
+            return Get(data);
+        }
+    }
+
+    ///////////////////
+    // Derived funcs //
+    ///////////////////
+
+    const PNode &Get(std::vector<std::string>::const_iterator it, decltype(it) end) const {
+        if (it == end)
+            return *this;
+
+        try {
+            return Get(*it).Get(it + 1, end);
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    PNode &Get(std::vector<std::string>::const_iterator it, decltype(it) end) {
+        try {
+            return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(it, end));
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    const PNode &Get(const std::vector<std::string> &vec) const {
+        try {
+            return Get(vec.cbegin(), vec.cend());
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    PNode &Get(const std::vector<std::string> &vec) {
+        try {
+            return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(vec.cbegin(), vec.cend()));
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    const PNode &GetLP(const std::string &perm) const {
+        try {
+            return Get(LinearPermission(perm).Permission());
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    PNode &GetLP(const std::string &perm) {
+        try {
+            return const_cast<PNode &>(const_cast<const PNode *>(this)->GetLP(perm));
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    bool Contains(const std::vector<std::string> &vec) const {
+        return Contains(vec.cbegin(), vec.cend());
+    }
+
+    bool Contains(const LinearPermission &perm) const {
+        return Contains(perm.Permission());
+    }
+
+    bool ContainsLP(const std::string &perm) const {
+        return Contains(LinearPermission(perm));
+    }
+
+    void Insert(std::vector<std::string>::const_iterator it, decltype(it) end) {
+        if (it == end)
+            return;
+
+        try {
+            Get(*it).Insert(it + 1, end);
+        } catch (std::out_of_range &) {
+            Insert(*it);
+            (children.end() - 1)->Insert(it + 1, end);
+        }
+    }
+
+    void Insert(const std::vector<std::string> &dataVec) {
+        Insert(dataVec.cbegin(), dataVec.cend());
+    }
+
+    void Insert(const LinearPermission &perm) {
+        Insert(perm.Permission());
+    }
+
+    void InsertLP(const std::string &perm) {
+        Insert(LinearPermission(perm));
+    }
+
+    ///////////////////////
+    // Misc helper funcs //
+    ///////////////////////
+
+    template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
+    void Traverse(Callable callback) {
+        InternalTraverse<Callable, PNode *, order>(callback, this);
+    }
+
+    template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
+    void Traverse(Callable callback) const {
+        const_cast<PNode *>(this)->InternalTraverse<Callable, const PNode *, order>(callback, this);
     }
 
     std::vector<std::string> GetFullBranch() const {
@@ -334,9 +353,9 @@ class PNode {
         return stream;
     }
 
-    std::optional<std::reference_wrapper<PNode>> parent;
-
   private:
+    PNode &root;
+    std::optional<std::reference_wrapper<PNode>> parent;
     std::vector<PNode> children;
     std::string data;
     std::size_t depth;
