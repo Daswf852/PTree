@@ -20,9 +20,9 @@ int main(int, char **) {
     for (const auto &str : toInsert)
         rootTree.InsertLP(str);
 
-    std::cout << rootTree;
+    //std::cout << rootTree;
 
-    for (const auto &str : toInsert)
+    /*for (const auto &str : toInsert)
         Test(rootTree, str);
 
     Test(rootTree, "root");
@@ -31,9 +31,9 @@ int main(int, char **) {
     Test(rootTree, "root.core.utils");
     Test(rootTree, "root.core.mgmt");
 
-    std::cout << std::endl;
+    std::cout << std::endl;*/
 
-    rootTree.Traverse([](Perm::PNode &node) {
+    /*rootTree.Traverse([](Perm::PNode &node) {
         if (node.HasChildren())
             return;
 
@@ -41,7 +41,23 @@ int main(int, char **) {
             std::cout << str << '.';
 
         std::cout << std::endl;
-    });
+    });*/
+
+    //rootTree.FillParentsOfChildren();
+    std::cout << Perm::LinearPermission(rootTree.GetLP("").GetFullBranch()).String() << std::endl;
+    std::cout << Perm::LinearPermission(rootTree.GetLP("core").GetFullBranch()).String() << std::endl;
+    std::cout << Perm::LinearPermission(rootTree.GetLP("core.utils").GetFullBranch()).String() << std::endl;
+    std::cout << Perm::LinearPermission(rootTree.GetLP("core.utils.echo").GetFullBranch()).String() << std::endl;
+
+    /*for (const auto &str : Perm::LinearPermission("special.placeholder").Permission())
+        std::cout << str << '.';
+    std::cout << std::endl;
+
+    std::cout << ref.Identifier() << '.';
+    for (std::optional<std::reference_wrapper<Perm::PNode>> current = ref.parent; current != std::nullopt; current = current->get().parent)
+        std::cout << current->get().Identifier() << '.';
+
+    std::cout << std::endl;*/
 
     return 0;
 }

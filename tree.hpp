@@ -130,33 +130,33 @@ class PNode {
     ~PNode() {
     }
 
-    std::size_t GetIndex(const std::string &data) const {
-        for (auto it = children.cbegin(); it != children.cend(); it++)
-            if (it->data == data)
-                return it - children.cbegin();
-        throw std::out_of_range("Couldn't find index");
-    }
-
-    std::vector<PNode>::iterator Get(const std::string &data) {
-        auto idx = std::find_if(children.begin(), children.end(), [&data](PNode &node) {
+    /*std::vector<PNode>::iterator GetIt(const std::string &data) {
+        auto it = std::find_if(children.begin(), children.end(), [&data](PNode &node) {
             return node.data == data;
         });
 
-        if (idx == children.end())
+        if (it == children.end())
             throw std::out_of_range("Couldn't find iterator");
 
-        return idx;
+        return it;
     }
 
-    std::vector<PNode>::const_iterator Get(const std::string &data) const {
-        auto idx = std::find_if(children.cbegin(), children.cend(), [&data](const PNode &node) {
+    std::vector<PNode>::const_iterator GetIt(const std::string &data) const {
+        auto it = std::find_if(children.cbegin(), children.cend(), [&data](const PNode &node) {
             return node.data == data;
         });
 
-        if (idx == children.cend())
+        if (it == children.cend())
             throw std::out_of_range("Couldn't find iterator");
 
-        return idx;
+        return it;
+    }*/
+
+    void FillParentsOfChildren() {
+        for (auto &child : children) {
+            child.parent = *this;
+            child.FillParentsOfChildren();
+        }
     }
 
     bool HasChildren() const {
@@ -180,8 +180,7 @@ class PNode {
             return;
 
         try {
-            auto targetIt = Get(*it);
-            targetIt->Insert(it + 1, end);
+            Get(*it).Insert(it + 1, end);
         } catch (std::out_of_range &) {
             Insert(*it);
             (children.end() - 1)->Insert(it + 1, end);
@@ -210,18 +209,19 @@ class PNode {
             return !HasChildren();
 
         try {
-            auto newIt = Get(*it);
-            return newIt->Contains(it + 1, end);
+            return Get(*it).Contains(it + 1, end);
         } catch (std::out_of_range &) {
             return false;
         }
     }
 
     bool Contains(const std::string &) const {
-        for (const auto &node : children)
-            if (node.data == data)
-                return true;
-        return false;
+        try {
+            Get(data);
+            return true;
+        } catch (std::out_of_range &) {
+            return false;
+        }
     }
 
     template<TraversalOrder order = TraversalOrder::PreOrder, typename Callable>
@@ -234,6 +234,70 @@ class PNode {
         const_cast<PNode *>(this)->InternalTraverse<Callable, const PNode *, order>(callback, this);
     }
 
+    const PNode &GetLP(const std::string &perm) const {
+        try {
+            return Get(LinearPermission(perm).Permission());
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    const PNode &Get(const std::vector<std::string> &vec) const {
+        try {
+            return Get(vec.cbegin(), vec.cend());
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    PNode &Get(const std::vector<std::string> &vec) {
+        try {
+            return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(vec.cbegin(), vec.cend()));
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    PNode &Get(std::vector<std::string>::const_iterator it, decltype(it) end) {
+        try {
+            return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(it, end));
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    const PNode &Get(std::vector<std::string>::const_iterator it, decltype(it) end) const {
+        if (it == end)
+            return *this;
+
+        try {
+            return Get(*it).Get(it + 1, end);
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    const PNode &Get(const std::string &data) const {
+        auto it = std::find_if(children.begin(), children.end(), [&data](const PNode &node) {
+            return node.data == data;
+        });
+
+        if (it == children.cend())
+            throw std::out_of_range("Couldn't find iterator");
+
+        return *it;
+    }
+
+    PNode &Get(const std::string &data) {
+        try {
+            return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(data));
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+
+        throw std::runtime_error("how the fuck");
+    }
+
     const std::string &Identifier() const {
         return data;
     }
@@ -244,8 +308,9 @@ class PNode {
 
     std::vector<std::string> GetFullBranch() const {
         std::vector<std::string> vec;
+        vec.push_back(data);
 
-        std::optional<std::reference_wrapper<const PNode>> current = *this;
+        std::optional<std::reference_wrapper<PNode>> current = parent;
         while (current != std::nullopt) {
             vec.push_back(current->get().data);
             current = current->get().parent;
@@ -269,8 +334,9 @@ class PNode {
         return stream;
     }
 
-  private:
     std::optional<std::reference_wrapper<PNode>> parent;
+
+  private:
     std::vector<PNode> children;
     std::string data;
     std::size_t depth;
