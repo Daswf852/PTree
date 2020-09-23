@@ -4,21 +4,21 @@
 
 int main(int, char **) {
     Shiba::Perm::PNode fullPermissions;
-    fullPermissions.InsertLP("foo.bar");
-    fullPermissions.InsertLP("foo.baz");
-    fullPermissions.InsertLP("foo.qux");
+    fullPermissions.InsertLP("special.placeholder");
+    fullPermissions.InsertLP("special.chanop");
+    fullPermissions.InsertLP("core.echo");
+    fullPermissions.InsertLP("core.ping");
+    fullPermissions.InsertLP("core.mgmt.restart");
+    fullPermissions.InsertLP("core.mgmt.pgive");
+    fullPermissions.InsertLP("core.mgmt.ptake");
+    fullPermissions.InsertLP("holo.addchan");
 
-    std::cout << "Full permission tree:" << std::endl;
-    std::cout << fullPermissions << std::endl;
+    std::string serialization = fullPermissions.Serialize();
+    std::cout << serialization << std::endl;
 
-    Shiba::Perm::PNode userPermissions;
-    userPermissions.InsertLP("foo");
-    std::cout << "User permissions before assisted removal:" << std::endl;
-    std::cout << userPermissions << std::endl;
-
-    userPermissions.Get("foo").AssistedRemove("bar", fullPermissions);
-    std::cout << "After removal:" << std::endl;
-    std::cout << userPermissions << std::endl;
+    auto newNode = Shiba::Perm::PNode::FromSerialization(serialization);
+    serialization = newNode.Serialize();
+    std::cout << serialization << std::endl;
 
     return 0;
 }

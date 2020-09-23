@@ -8,6 +8,7 @@
 #include <regex>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace Shiba::Perm {
@@ -151,6 +152,59 @@ class PNode {
         depth = std::move(other.depth);
         children = std::move(other.children);
         return *this;
+    }
+
+    static PNode FromSerialization(const std::string &data) {
+        std::vector<std::pair<std::size_t, std::string>> tokens;
+
+        std::string::size_type cpos = 0;
+
+        while (cpos < data.size()) {
+            auto wordStart = data.find_first_not_of('.', cpos);
+            auto nextSegment = data.find_first_of('.', wordStart);
+
+            auto dataSize = nextSegment - wordStart;
+            std::size_t depth = wordStart - cpos;
+
+            tokens.push_back(std::make_pair<std::size_t, std::string>((std::size_t /* ???? */)depth, data.substr(wordStart, dataSize)));
+
+            cpos = nextSegment;
+        }
+
+        PNode rootnode(tokens.at(0).second);
+        std::vector<std::string> currentBranch{tokens.at(0).second};
+
+        std::size_t prevDepth = 0;
+        for (const auto &pair : tokens) {
+            if (pair.first == 0)
+                continue;
+
+            if (pair.first == prevDepth + 1) {
+                currentBranch.push_back(pair.second);
+            } else if (pair.first == prevDepth) {
+                currentBranch.pop_back();
+                currentBranch.push_back(pair.second);
+            } else if (pair.first < prevDepth) {
+                std::size_t diff = prevDepth - pair.first;
+                for (std::size_t i = 0; i <= diff; i++)
+                    currentBranch.pop_back();
+
+                currentBranch.push_back(pair.second);
+            }
+            prevDepth = pair.first;
+
+            auto perm = LinearPermission(currentBranch);
+            perm.PopFront();
+            rootnode.Insert(perm);
+            //am i lazy? yes
+            //am i sleepy? yes
+            //do i have a headache due to stiff shoulders? yes
+            //do i have coffee? no
+            //is this inefficent, slow and utter shit? absolutely.
+            ///TODO: fix this shitshow above
+        }
+
+        return rootnode;
     }
 
     ///////////////////
@@ -416,6 +470,21 @@ class PNode {
         });
 
         return stream;
+    }
+
+    void Serialize(std::ostream &stream) const {
+        Traverse([&stream](const PNode &node) {
+            for (std::size_t i = 0; i < node.Depth(); i++)
+                stream << '.';
+
+            stream << node.data;
+        });
+    }
+
+    std::string Serialize() const {
+        std::ostringstream oss;
+        Serialize(oss);
+        return oss.str();
     }
 
   private:
