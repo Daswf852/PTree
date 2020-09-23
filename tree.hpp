@@ -10,8 +10,6 @@
 #include <stdexcept>
 #include <vector>
 
-#include "utils.hpp"
-
 namespace Shiba::Perm {
 
 enum class TraversalOrder {
@@ -27,9 +25,6 @@ bool SegmentIsValid(const std::string &segment) {
     return std::regex_match(segment, pSegmentRegex);
 }
 
-except(PermissionException, std::exception);
-except(BadSegment, PermissionException);
-
 class LinearPermission {
   public:
     LinearPermission(const std::string &pstr)
@@ -42,7 +37,7 @@ class LinearPermission {
             if (std::regex_match(current, pSegmentRegex))
                 tempStore.push_back(current);
             else
-                throw BadSegment();
+                throw std::invalid_argument("Regex did not match a given segment");
         }
 
         permission = std::move(tempStore);
@@ -58,7 +53,7 @@ class LinearPermission {
             if (std::regex_match(str, pSegmentRegex))
                 permission.push_back(str);
             else
-                throw BadSegment();
+                throw std::invalid_argument("Regex did not match a given segment");
         }
         RecalculateLazyString();
     }
@@ -251,30 +246,6 @@ class PNode {
         return std::erase_if(children, [&data](const PNode &node) { return node.data == data; }) >= 1;
     }
 
-    void AssistedRemove(const std::string &data, const PNode &fullSet) {
-        //if the children isnt contained but fullset has the children in this branch, insert every child except for the one removed to this node
-        bool erased = Remove(data);
-
-        if (!erased) { //didnt delete anything meaning that this is either a leaf or a wildcard
-            try {
-                auto perm = GetPermission();
-                perm.PopFront();
-                auto &ref = fullSet.Get(perm);
-
-                if (!ref.HasChildren())
-                    return; //this was a leaf permission anyways
-                //yep, this node is a wildcard
-
-                for (const auto &child : ref.children) {
-                    if (child.data != data)
-                        Insert(child.data); //doing a regular insert to only get the identifier to have wildcards if needed (and to have proper parentship, root etc. (and to not copy any subchildren))
-                }
-            } catch (std::out_of_range &) {
-                return; //we cant make a fill-the-rest thing since the full set of permissions don't have the parent permission to the wanted children
-            }
-        }
-    }
-
     ///////////////////
     // Derived funcs //
     ///////////////////
@@ -382,6 +353,29 @@ class PNode {
         Insert(LinearPermission(perm));
     }
 
+    void AssistedRemove(const std::string &data, const PNode &fullSet) {
+        //if the children isnt contained but fullset has the children in this branch, insert every child except for the one removed to this node
+        bool erased = Remove(data);
+
+        if (!erased) { //didnt delete anything meaning that this is either a leaf or a wildcard
+            try {
+                auto perm = GetPermission().Permission();
+                auto &ref = fullSet.Get(perm.cbegin() + 1, perm.cend());
+
+                if (!ref.HasChildren())
+                    return; //this was a leaf permission anyways
+                //yep, this node is a wildcard
+
+                for (const auto &child : ref.children) {
+                    if (child.data != data)
+                        Insert(child.data); //doing a regular insert to only get the identifier to have wildcards if needed (and to have proper parentship, root etc. (and to not copy any subchildren))
+                }
+            } catch (std::out_of_range &) {
+                return; //we cant make a fill-the-rest thing since the full set of permissions don't have the parent permission to the wanted children
+            }
+        }
+    }
+
     ///////////////////////
     // Misc helper funcs //
     ///////////////////////
@@ -415,10 +409,10 @@ class PNode {
     }
 
     friend std::ostream &operator<<(std::ostream &stream, const PNode &tree) {
-        tree.Traverse<TraversalOrder::PreOrder>([](const Shiba::Perm::PNode &node) {
+        tree.Traverse<TraversalOrder::PreOrder>([&stream](const Shiba::Perm::PNode &node) {
             for (std::size_t i = 0; i != node.Depth(); i++)
-                std::cout << ' ';
-            std::cout << node.Identifier() << std::endl;
+                stream << ' ';
+            stream << node.Identifier() << std::endl;
         });
 
         return stream;
