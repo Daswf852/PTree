@@ -9,3 +9,5 @@ add_executable(ptree main.cpp)
 include_directories(
     thirdparty/Utils
 )
+
+target_link_libraries(ptree pthread)

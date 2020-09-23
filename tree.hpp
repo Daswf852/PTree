@@ -213,11 +213,22 @@ class PNode {
     PNode &Insert(const std::string &data) {
         if (!Contains(data)) {
             children.push_back(std::move(PNode(data, root, *this, depth + 1)));
-            root.InsertParents();
+
+            if (children.size() > 1)
+                InsertParents();
+
             return *(children.end() - 1);
         } else {
             return Get(data);
         }
+    }
+
+    std::size_t Size() const {
+        std::size_t ret = 0;
+        Traverse([&ret](const PNode &) {
+            ret++;
+        });
+        return ret;
     }
 
     ///////////////////
