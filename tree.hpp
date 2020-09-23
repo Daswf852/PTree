@@ -127,7 +127,7 @@ class PNode {
     , data("root")
     , depth(0) {}
 
-    PNode(std::string data)
+    PNode(const std::string &data)
     : root(*this)
     , parent(std::nullopt)
     , data(data)
@@ -139,7 +139,23 @@ class PNode {
     , data(data)
     , depth(depth) {}
 
+    PNode(PNode &&other) noexcept
+    : root(std::move(other.root))
+    , parent(std::move(other.parent))
+    , data(std::move(other.data))
+    , depth(std::move(other.depth))
+    , children(std::move(other.children)) {}
+
     ~PNode() {
+    }
+
+    PNode &operator=(PNode &&other) noexcept {
+        root = std::move(other.root);
+        parent = std::move(other.parent);
+        data = std::move(other.data);
+        depth = std::move(other.depth);
+        children = std::move(other.children);
+        return *this;
     }
 
     ///////////////////
@@ -231,6 +247,34 @@ class PNode {
         return ret;
     }
 
+    bool Remove(const std::string &data) {
+        return std::erase_if(children, [&data](const PNode &node) { return node.data == data; }) >= 1;
+    }
+
+    void AssistedRemove(const std::string &data, const PNode &fullSet) {
+        //if the children isnt contained but fullset has the children in this branch, insert every child except for the one removed to this node
+        bool erased = Remove(data);
+
+        if (!erased) { //didnt delete anything meaning that this is either a leaf or a wildcard
+            try {
+                auto perm = GetPermission();
+                perm.PopFront();
+                auto &ref = fullSet.Get(perm);
+
+                if (!ref.HasChildren())
+                    return; //this was a leaf permission anyways
+                //yep, this node is a wildcard
+
+                for (const auto &child : ref.children) {
+                    if (child.data != data)
+                        Insert(child.data); //doing a regular insert to only get the identifier to have wildcards if needed (and to have proper parentship, root etc. (and to not copy any subchildren))
+                }
+            } catch (std::out_of_range &) {
+                return; //we cant make a fill-the-rest thing since the full set of permissions don't have the parent permission to the wanted children
+            }
+        }
+    }
+
     ///////////////////
     // Derived funcs //
     ///////////////////
@@ -265,6 +309,22 @@ class PNode {
     PNode &Get(const std::vector<std::string> &vec) {
         try {
             return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(vec.cbegin(), vec.cend()));
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    const PNode &Get(const LinearPermission &perm) const {
+        try {
+            return Get(perm.Permission());
+        } catch (std::out_of_range &) {
+            std::rethrow_exception(std::current_exception());
+        }
+    }
+
+    PNode &Get(const LinearPermission &perm) {
+        try {
+            return const_cast<PNode &>(const_cast<const PNode *>(this)->Get(perm));
         } catch (std::out_of_range &) {
             std::rethrow_exception(std::current_exception());
         }
@@ -365,7 +425,9 @@ class PNode {
     }
 
   private:
-    PNode &root;
+    //PNode &root;
+    //^ dammit
+    std::reference_wrapper<PNode> root;
     std::optional<std::reference_wrapper<PNode>> parent;
     std::vector<PNode> children;
     std::string data;
