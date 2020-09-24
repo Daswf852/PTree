@@ -297,7 +297,13 @@ class PNode {
     }
 
     bool Remove(const std::string &data) {
-        return std::erase_if(children, [&data](const PNode &node) { return node.data == data; }) >= 1;
+        //return std::erase_if(children, [&data](const PNode &node) { return node.data == data; }) >= 1;
+        for (auto it = children.begin(); it != children.end(); it++)
+            if (it->data == data) {
+                children.erase(it);
+                return true;
+            }
+        return false;
     }
 
     ///////////////////
