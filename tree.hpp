@@ -138,9 +138,9 @@ class PNode {
     PNode(PNode &&other) noexcept
     : root(std::move(other.root))
     , parent(std::move(other.parent))
+    , children(std::move(other.children))
     , data(std::move(other.data))
-    , depth(std::move(other.depth))
-    , children(std::move(other.children)) {}
+    , depth(std::move(other.depth)) {}
 
     ~PNode() {
     }
@@ -277,7 +277,7 @@ class PNode {
 
     PNode &Insert(const std::string &data) {
         if (!Contains(data)) {
-            children.push_back(std::move(PNode(data, root, *this, depth + 1)));
+            children.push_back(PNode(data, root, *this, depth + 1));
 
             if (children.size() > 1)
                 InsertParents();
