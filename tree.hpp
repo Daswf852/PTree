@@ -22,7 +22,7 @@ enum class TraversalOrder {
 const static char pDelimiter = '.';
 const static std::regex pSegmentRegex("^[a-z]{1}[a-zA-Z_-]{0,}$");
 
-bool SegmentIsValid(const std::string &segment) {
+static bool SegmentIsValid(const std::string &segment) {
     return std::regex_match(segment, pSegmentRegex);
 }
 
